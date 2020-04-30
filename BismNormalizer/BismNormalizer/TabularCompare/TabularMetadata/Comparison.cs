@@ -828,7 +828,7 @@ namespace BismNormalizer.TabularCompare.TabularMetadata
             {
                 foreach (ComparisonObject childComparisonObject in comparisonObject.ChildComparisonObjects)
                 {
-                    DeleteCalculationItem(childComparisonObject);                                    //CalculationItem
+                    DeleteCalculationItem(childComparisonObject, comparisonObject.SourceObjectName); //CalculationItem, Table
                 }
             }
 
@@ -1811,20 +1811,19 @@ namespace BismNormalizer.TabularCompare.TabularMetadata
 
         #region CalculationItems
 
-        private void DeleteCalculationItem(ComparisonObject comparisonObject)
+        private void DeleteCalculationItem(ComparisonObject comparisonObject, string tableName)
         {
             if ((comparisonObject.ComparisonObjectType == ComparisonObjectType.CalculationItem || comparisonObject.ComparisonObjectType == ComparisonObjectType.Kpi) &&
                     comparisonObject.MergeAction == MergeAction.Delete)
             {
-                foreach (Table tableTarget in _targetTabularModel.Tables)
+                Table tableTarget = _targetTabularModel.Tables.FindByName(tableName);
+                if (tableTarget != null)
                 {
                     CalculationItem calculationItemTarget = tableTarget.CalculationItems.FindByName(comparisonObject.TargetObjectInternalName);
-
                     if (calculationItemTarget != null)
                     {
                         // CalculationItem may have already been deleted if parent table was deleted
                         tableTarget.DeleteCalculationItem(comparisonObject.TargetObjectInternalName);
-                        break;
                     }
                 }
 
@@ -1837,17 +1836,6 @@ namespace BismNormalizer.TabularCompare.TabularMetadata
             if ((comparisonObject.ComparisonObjectType == ComparisonObjectType.CalculationItem || comparisonObject.ComparisonObjectType == ComparisonObjectType.Kpi) &&
                     comparisonObject.MergeAction == MergeAction.Create)
             {
-                foreach (Table tableInTarget in _targetTabularModel.Tables)
-                {
-                    CalculationItem calculationItemInTarget = tableInTarget.CalculationItems.FindByName(comparisonObject.SourceObjectInternalName);
-
-                    if (calculationItemInTarget != null)
-                    {
-                        OnValidationMessage(new ValidationMessageEventArgs($"Unable to create calculation item {comparisonObject.SourceObjectInternalName} because name already exists in target model.", ValidationMessageType.CalculationItem, ValidationMessageStatus.Warning));
-                        return;
-                    }
-                }
-
                 Table tableSource = _sourceTabularModel.Tables.FindByName(tableName);
                 Table tableTarget = _targetTabularModel.Tables.FindByName(tableName);
 

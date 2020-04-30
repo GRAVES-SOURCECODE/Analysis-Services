@@ -16,6 +16,7 @@ using BismNormalizer.TabularCompare.Core;
 using BismNormalizer.TabularCompare.UI;
 using CefSharp;
 using CefSharp.WinForms;
+using Microsoft.AnalysisServices.Tabular;
 
 namespace AlmToolkit
 {
@@ -48,35 +49,47 @@ namespace AlmToolkit
         /// </summary>
         private void InitializeChromium()
         {
-            // Check if the page exists
-            string page = string.Format(@"{0}\html-resources\dist\index.html", Application.StartupPath);
-            if (!File.Exists(page))
+            try
             {
-                MessageBox.Show("Error html file doesn't exist : " + page);
+                // Check if the page exists
+                string page = string.Format(@"{0}\html-resources\dist\index.html", Application.StartupPath);
+                if (!File.Exists(page))
+                {
+                    MessageBox.Show("Error html file doesn't exist : " + page, Utils.AssemblyProduct, MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+
+                CefSettings settings = new CefSettings();
+                // Initialize cef with the provided settings
+                settings.CefCommandLineArgs.Add("disable-gpu", "1");
+
+                settings.BrowserSubprocessPath = @"x86\CefSharp.BrowserSubprocess.exe";
+                //settings.BrowserSubprocessPath = string.Format(@"{0}\x86\CefSharp.BrowserSubprocess.exe", Application.StartupPath); ;
+
+                Cef.Initialize(settings, performDependencyCheck: false, browserProcessHandler: null);
+                // Create a browser component
+                chromeBrowser = new ChromiumWebBrowser(page);
+                // Add it to the form and fill it to the form window.
+                this.Controls.Add(chromeBrowser);
+                chromeBrowser.Dock = DockStyle.Fill;
+                chromeBrowser.BringToFront();
+
+                CefSharpSettings.LegacyJavascriptBindingEnabled = true;
+
+                // Initialize the interaction variable
+                _comparisonInter = new ComparisonJSInteraction(this);
+
+                // Register C# objects
+                chromeBrowser.RegisterAsyncJsObject("chromeDebugger", new ChromeDebugger(chromeBrowser, this));
+                chromeBrowser.RegisterAsyncJsObject("comparisonJSInteraction", _comparisonInter);
             }
-
-            CefSettings settings = new CefSettings();
-            // Initialize cef with the provided settings
-            settings.CefCommandLineArgs.Add("disable-gpu", "1");
-            settings.BrowserSubprocessPath = @"x86\CefSharp.BrowserSubprocess.exe";
-
-            Cef.Initialize(settings, performDependencyCheck: false, browserProcessHandler: null);
-            // Create a browser component
-            chromeBrowser = new ChromiumWebBrowser(page);
-            // Add it to the form and fill it to the form window.
-            this.Controls.Add(chromeBrowser);
-            chromeBrowser.Dock = DockStyle.Fill;
-            chromeBrowser.BringToFront();
-
-            CefSharpSettings.LegacyJavascriptBindingEnabled = true;
-
-            // Initialize the interaction variable
-            _comparisonInter = new ComparisonJSInteraction(this);
-
-            // Register C# objects
-            chromeBrowser.RegisterAsyncJsObject("chromeDebugger", new ChromeDebugger(chromeBrowser, this));
-            chromeBrowser.RegisterAsyncJsObject("comparisonJSInteraction", _comparisonInter);
-
+            catch (FileNotFoundException)
+            {
+                MessageBox.Show("FileNotFoundException in InitializeChromium().\n\nPlease try to install C++ Redistributable Packages for Visual Studio x86, min version www.microsoft.com/download/details.aspx?id=40784", Utils.AssemblyProduct, MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+            catch (Exception exc)
+            {
+                MessageBox.Show(exc.Message, Utils.AssemblyProduct, MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
         }
 
         private void ComparisonForm_Load(object sender, EventArgs e)
@@ -261,6 +274,12 @@ namespace AlmToolkit
                 this.CompareTabularModels();
                 toolStripStatusLabel1.Text = "ALM Toolkit - finished comparing datasets";
             }
+            catch (TomInternalException)
+            {
+                //todo: delete extra info once Oren's fix
+                MessageBox.Show("TOM internal serialization error occurred.", Utils.AssemblyProduct, MessageBoxButtons.OK, MessageBoxIcon.Error);
+                SetNotComparedState();
+            }
             catch (Exception exc)
             {
                 MessageBox.Show(exc.Message, Utils.AssemblyProduct, MessageBoxButtons.OK, MessageBoxIcon.Error);
@@ -416,7 +435,7 @@ namespace AlmToolkit
         {
             if (_comparisonInfo.ConnectionInfoSource.UseDesktop)
             {
-                txtSource.Text = "PBI Desktop/SSDT: " + _comparisonInfo.ConnectionInfoSource.ServerName + ";" + _comparisonInfo.ConnectionInfoSource.DesktopName;
+                txtSource.Text = "PBI Desktop: " + _comparisonInfo.ConnectionInfoSource.ServerName + ";" + _comparisonInfo.ConnectionInfoSource.DesktopName;
             }
             else if (_comparisonInfo.ConnectionInfoSource.UseBimFile)
             {
@@ -429,7 +448,7 @@ namespace AlmToolkit
 
             if (_comparisonInfo.ConnectionInfoTarget.UseDesktop)
             {
-                txtTarget.Text = "PBI Desktop/SSDT: " + _comparisonInfo.ConnectionInfoTarget.ServerName + ";" + _comparisonInfo.ConnectionInfoTarget.DesktopName;
+                txtTarget.Text = "PBI Desktop: " + _comparisonInfo.ConnectionInfoTarget.ServerName + ";" + _comparisonInfo.ConnectionInfoTarget.DesktopName;
             }
             else if (_comparisonInfo.ConnectionInfoTarget.UseBimFile)
             {
